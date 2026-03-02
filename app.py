@@ -1,177 +1,226 @@
-# =============================================================================
-# DreamStream — Journal de rêves intelligent
-# APIs utilisées : Groq uniquement (gratuit)
-# Clés API      : fichier .env
-# =============================================================================
-# INSTALLATION (dans ton terminal) :
-#   pip install streamlit groq python-dotenv
-#
-# CONFIGURATION :
-#   Crée un fichier .env dans le même dossier avec :
-#   GROQ_API_KEY=ta_clé_ici
-#
-# LANCEMENT :
-#   streamlit run app.py
-# =============================================================================
 
 import streamlit as st
 import os
 import json
+import requests
 from datetime import datetime
 from pathlib import Path
-from dotenv import load_dotenv   # lit le fichier .env
-from groq import Groq            # client officiel Groq
+from dotenv import load_dotenv
+from groq import Groq
 
-# --- Chargement des variables d'environnement depuis .env ---
+# Je charge mes clés API depuis le fichier .env
 load_dotenv()
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+HF_API_KEY   = os.environ.get("HF_API_KEY", "")
 
-# =============================================================================
-# CONFIG PAGE
-# =============================================================================
+# L'adresse du modèle d'image sur Hugging Face
+IMAGE_MODEL_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+
+# Le fichier où je sauvegarde les rêves
+JOURNAL_FILE = "mes_reves.json"
+
+
+# ---------------------------------------------------------------------------
+# Mes fonctions pour gérer le journal
+# ---------------------------------------------------------------------------
+
+def load_journal():
+    # Si le fichier existe déjà, je le lis. Sinon je retourne une liste vide.
+    if Path(JOURNAL_FILE).exists():
+        with open(JOURNAL_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+
+def save_dream(new_dream):
+    # Je récupère les rêves existants, j'ajoute le nouveau en haut, et je sauvegarde
+    all_dreams = load_journal()
+    all_dreams.insert(0, new_dream)
+    with open(JOURNAL_FILE, "w", encoding="utf-8") as f:
+        json.dump(all_dreams, f, ensure_ascii=False, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Ma fonction qui envoie le rêve à Groq pour l'analyser
+# ---------------------------------------------------------------------------
+
+def analyze_dream(dream_text):
+    # Je crée le client Groq avec ma clé
+    client = Groq(api_key=GROQ_API_KEY)
+
+    # Mon prompt : je demande à l'IA de répondre dans un format précis
+    # pour que je puisse facilement extraire chaque partie ensuite
+    my_prompt = f"""
+Tu es un expert en interprétation des rêves.
+Analyse ce rêve et réponds dans ce format exact, sans rien ajouter d'autre :
+
+RÉSUMÉ: [résume le rêve en 2 phrases maximum]
+INTERPRÉTATION: [explique la signification symbolique en 2-3 phrases]
+MOTS_CLÉS: [donne 5 mots-clés en anglais séparés par des virgules, très visuels]
+
+Le rêve à analyser : {dream_text}
+"""
+
+    # J'envoie la requête au modèle
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": my_prompt}],
+        temperature=0.7,  # entre 0 (strict) et 1 (très créatif)
+        max_tokens=400,
+    )
+
+    # Je récupère le texte brut de la réponse
+    raw_text = response.choices[0].message.content
+
+    # Je découpe la réponse ligne par ligne pour extraire chaque section
+    summary        = ""
+    interpretation = ""
+    keywords       = []
+
+    for line in raw_text.split("\n"):
+        line = line.strip()
+        if line.startswith("RÉSUMÉ:"):
+            summary = line.replace("RÉSUMÉ:", "").strip()
+        elif line.startswith("INTERPRÉTATION:"):
+            interpretation = line.replace("INTERPRÉTATION:", "").strip()
+        elif line.startswith("MOTS_CLÉS:"):
+            raw_keywords = line.replace("MOTS_CLÉS:", "").strip()
+            keywords = [kw.strip() for kw in raw_keywords.split(",")]
+
+    return summary, interpretation, keywords
+
+
+# ---------------------------------------------------------------------------
+# Ma fonction qui génère une image avec Hugging Face
+# ---------------------------------------------------------------------------
+
+def generate_image(keywords):
+    # Je transforme mes mots-clés en un prompt artistique pour l'IA
+    image_prompt = (
+        ", ".join(keywords)
+        + ", dreamlike surreal painting, soft glowing colors, fantasy art, highly detailed"
+    )
+
+    # J'envoie la requête à Stable Diffusion via l'API Hugging Face
+    response = requests.post(
+        IMAGE_MODEL_URL,
+        headers={"Authorization": f"Bearer {HF_API_KEY}"},
+        json={"inputs": image_prompt},
+        timeout=60,
+    )
+
+    # Si ça marche (code 200), je retourne les données de l'image
+    if response.status_code == 200:
+        return response.content
+
+    # Sinon je retourne None et je gère l'erreur dans l'interface
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Configuration de la page Streamlit
+# ---------------------------------------------------------------------------
+
 st.set_page_config(
     page_title="DreamStream 🌙",
     page_icon="🌙",
     layout="centered",
 )
 
-# =============================================================================
-# GESTION DU JOURNAL (sauvegarde dans un fichier JSON local)
-# =============================================================================
-FICHIER_JOURNAL = "mes_reves.json"
 
-def charger_journal() -> list:
-    """Retourne la liste des rêves depuis le fichier JSON."""
-    if Path(FICHIER_JOURNAL).exists():
-        with open(FICHIER_JOURNAL, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
+# ---------------------------------------------------------------------------
+# Menu latéral : mon historique de rêves
+# ---------------------------------------------------------------------------
 
-def sauvegarder_reve(reve: dict) -> None:
-    """Ajoute un rêve en tête du journal et sauvegarde."""
-    journal = charger_journal()
-    journal.insert(0, reve)   # plus récent en premier
-    with open(FICHIER_JOURNAL, "w", encoding="utf-8") as f:
-        json.dump(journal, f, ensure_ascii=False, indent=2)
-
-# =============================================================================
-# ANALYSE IA AVEC GROQ
-# =============================================================================
-def analyser_reve(texte: str) -> dict:
-    """
-    Envoie le texte du rêve à l'IA Groq (Llama 3).
-    Retourne un dictionnaire avec : résumé, interprétation, mots-clés.
-    """
-    client = Groq(api_key=GROQ_API_KEY)
-
-    # Prompt optimisé : on demande un format strict pour faciliter le parsing
-    prompt = f"""
-Tu es un expert en interprétation des rêves. Analyse le rêve ci-dessous.
-Réponds UNIQUEMENT dans ce format (respecte exactement les étiquettes) :
-
-RÉSUMÉ: [2 phrases max résumant le rêve]
-INTERPRÉTATION: [2-3 phrases sur la signification symbolique]
-MOTS_CLÉS: [5 mots-clés en anglais séparés par des virgules, très visuels]
-
-Rêve : {texte}
-"""
-
-    réponse = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",   # modèle rapide et gratuit
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,           # créativité modérée
-        max_tokens=400,
-    )
-
-    # On récupère le texte brut retourné par l'IA
-    texte_ia = réponse.choices[0].message.content
-
-    # On extrait chaque section grâce aux étiquettes
-    résultat = {"resume": "", "interpretation": "", "mots_cles": []}
-
-    for ligne in texte_ia.split("\n"):
-        ligne = ligne.strip()
-        if ligne.startswith("RÉSUMÉ:"):
-            résultat["resume"] = ligne.replace("RÉSUMÉ:", "").strip()
-        elif ligne.startswith("INTERPRÉTATION:"):
-            résultat["interpretation"] = ligne.replace("INTERPRÉTATION:", "").strip()
-        elif ligne.startswith("MOTS_CLÉS:"):
-            brut = ligne.replace("MOTS_CLÉS:", "").strip()
-            résultat["mots_cles"] = [m.strip() for m in brut.split(",")]
-
-    return résultat
-
-# =============================================================================
-# SIDEBAR — Historique des rêves
-# =============================================================================
 with st.sidebar:
     st.markdown("## 🌙 DreamStream")
     st.divider()
-    st.markdown("### 📖 Historique")
+    st.markdown("### 📖 Mes rêves précédents")
 
-    journal = charger_journal()
+    dreams = load_journal()
 
-    if not journal:
-        st.info("Aucun rêve enregistré pour l'instant.")
+    if not dreams:
+        st.info("Pas encore de rêves enregistrés.")
     else:
-        for reve in journal:
-            with st.expander(f"🌀 {reve['date']}"):
-                st.markdown(f"**Rêve :** {reve['texte']}")
-                st.markdown(f"**Résumé :** {reve['resume']}")
-                st.markdown(f"**Interprétation :** {reve['interpretation']}")
-                if reve.get("mots_cles"):
-                    st.markdown("**Mots-clés :** " + " · ".join(f"`{m}`" for m in reve["mots_cles"]))
+        for dream in dreams:
+            with st.expander(f"🌀 {dream['date']}"):
+                st.markdown(f"**Rêve :** {dream['text']}")
+                st.markdown(f"**Résumé :** {dream['summary']}")
+                st.markdown(f"**Interprétation :** {dream['interpretation']}")
+                if dream.get("keywords"):
+                    st.markdown("**Mots-clés :** " + " · ".join(f"`{kw}`" for kw in dream["keywords"]))
 
-# =============================================================================
-# PAGE PRINCIPALE
-# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Page principale
+# ---------------------------------------------------------------------------
+
 st.title("🌙 DreamStream")
-st.markdown("*Décris ton rêve, l'IA l'analyse et l'interprète pour toi.*")
+st.markdown("*Décris ton rêve, l'IA l'analyse et l'illustre pour toi.*")
 st.divider()
 
-# --- Saisie du rêve ---
+
+# Zone de saisie du rêve
 st.markdown("### ✍️ Décris ton rêve")
-texte_reve = st.text_area(
-    label="ton rêve",
-    placeholder="Cette nuit, je me trouvais dans une forêt immense où les arbres chantaient...",
+dream_input = st.text_area(
+    label="dream",
+    placeholder="Cette nuit, je volais au-dessus d'une mer de nuages dorés...",
     height=180,
     label_visibility="collapsed",
 )
 
-# --- Bouton d'analyse ---
+# Bouton pour lancer l'analyse
 if st.button("🔮 Analyser mon rêve", type="primary", use_container_width=True):
 
-    if not texte_reve.strip():
-        st.warning("⚠️ Écris d'abord ton rêve ci-dessus.")
+    if not dream_input.strip():
+        st.warning("⚠️ Écris d'abord ton rêve !")
+
     else:
-        # Appel à l'IA
-        with st.spinner("🔮 L'IA analyse ton rêve..."):
+        # Étape 1 : j'envoie le rêve à Groq
+        with st.spinner("🔮 Analyse en cours..."):
             try:
-                résultat = analyser_reve(texte_reve)
-            except Exception as erreur:
-                st.error(f"❌ Erreur : {erreur}")
+                summary, interpretation, keywords = analyze_dream(dream_input)
+            except Exception as e:
+                st.error(f"❌ Erreur lors de l'analyse : {e}")
                 st.stop()
 
-        # --- Affichage des résultats ---
+        # J'affiche les résultats
         st.divider()
 
         st.markdown("### 📝 Résumé")
-        st.info(résultat["resume"] or "Aucun résumé généré.")
+        st.info(summary or "Aucun résumé généré.")
 
         st.markdown("### 🔮 Interprétation symbolique")
-        st.success(résultat["interpretation"] or "Aucune interprétation générée.")
+        st.success(interpretation or "Aucune interprétation générée.")
 
-        if résultat["mots_cles"]:
+        if keywords:
             st.markdown("### 🏷️ Mots-clés visuels")
-            st.markdown("  ".join(f"`{m}`" for m in résultat["mots_cles"]))
+            st.markdown("  ".join(f"`{kw}`" for kw in keywords))
 
-        # --- Sauvegarde automatique ---
-        sauvegarder_reve({
+        # Étape 2 : je génère l'image si la clé HF est disponible
+        st.divider()
+        st.markdown("### 🎨 Illustration générée par l'IA")
+
+        if HF_API_KEY and keywords:
+            with st.spinner("🎨 Génération de l'image... (peut prendre 30-60 secondes)"):
+                try:
+                    image = generate_image(keywords)
+                    if image:
+                        st.image(image, caption="✨ Ton rêve en image")
+                    else:
+                        st.warning("⚠️ Le modèle est occupé, réessaie dans quelques secondes.")
+                except Exception as e:
+                    st.warning(f"⚠️ Erreur image : {e}")
+        else:
+            st.info("💡 Ajoute `HF_API_KEY` dans ton `.env` pour générer l'image.")
+
+        # Étape 3 : je sauvegarde le rêve dans mon journal
+        save_dream({
             "date": datetime.now().strftime("%d/%m/%Y à %H:%M"),
-            "texte": texte_reve,
-            "resume": résultat["resume"],
-            "interpretation": résultat["interpretation"],
-            "mots_cles": résultat["mots_cles"],
+            "text": dream_input,
+            "summary": summary,
+            "interpretation": interpretation,
+            "keywords": keywords,
         })
 
-        st.caption("✅ Rêve sauvegardé dans ton historique (menu gauche).")
+        st.caption("✅ Rêve sauvegardé dans ton journal !")

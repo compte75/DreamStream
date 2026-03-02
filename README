@@ -1,61 +1,70 @@
-#  DreamStream — Journal de rêves intelligent
+# DreamStream
 
-Application Python qui analyse et interprète tes rêves grâce à l'IA.
-
----
-
-## 📁 Structure du projet
-
-```
-dreamstream/
-├── app.py              → code principal de l'application
-├── requirements.txt    → liste des bibliothèques nécessaires
-├── .env                → clés API (ne pas partager !)
-├── .gitignore          → fichiers à exclure de Git
-├── README.md           → ce fichier
-└── mes_reves.json      → créé automatiquement au premier rêve
-```
+DreamStream est une application que j'ai développée dans le cadre de mon cours de 2ème année. Elle permet d'analyser et d'illustrer des rêves grâce à l'intelligence artificielle. L'utilisateur décrit son rêve en texte, et l'application génère automatiquement un résumé, une interprétation symbolique et une illustration artistique.
 
 ---
 
-## ⚙️ Installation
 
-### 1. Clone le projet
+```
+
+
+## Installation
+
+### 1. Cloner le projet
 ```bash
 git clone https://github.com/ton-pseudo/dreamstream.git
-cd dreamstream
+cd DreamStream
 ```
 
-### 2. Crée un environnement virtuel
+### 2. Créer un environnement virtuel
+L'environnement virtuel permet d'isoler les bibliothèques du projet pour éviter les conflits avec d'autres projets Python.
 ```bash
-# Créer l'environnement
 python -m venv venv
 
-# L'activer (Mac/Linux)
+# Activer sur Mac/Linux
 source venv/bin/activate
 
-# L'activer (Windows)
+# Activer sur Windows
 venv\Scripts\activate
 ```
 
-### 3. Installe les dépendances
+### 3. Installer les dépendances
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure ta clé API
-Crée un fichier `.env` à la racine du projet :
-```
-GROQ_API_KEY=ta_clé_ici
-```
-Clé gratuite sur : https://console.groq.com
+### 4. Configurer les clés API
 
-### 5. Lance l'application
+Créer un fichier `.env` à la racine du projet et y ajouter les deux clés suivantes :
+```
+GROQ_API_KEY=ta_clé_groq_ici
+HF_API_KEY=ta_clé_huggingface_ici
+```
+
+| Clé | Où l'obtenir | Gratuit |
+|---|---|---|
+| GROQ_API_KEY | console.groq.com | Oui |
+| HF_API_KEY | huggingface.co/settings/tokens | Oui |
+
+Note : le fichier `.env` est listé dans le `.gitignore` et ne sera jamais envoyé sur GitHub.
+
+### 5. Lancer l'application
 ```bash
 streamlit run app.py
 ```
 
-L'app s'ouvre sur : http://localhost:8501
+L'application s'ouvre automatiquement sur http://localhost:8501
+
+---
+
+## Fonctionnalités
+
+- Saisie du rêve en texte libre
+- Résumé automatique généré par l'IA
+- Interprétation symbolique et narrative
+- Génération d'une illustration artistique du rêve
+- Historique consultable dans le menu latéral
+- Sauvegarde automatique dans un fichier JSON
 
 ---
 
@@ -64,19 +73,10 @@ L'app s'ouvre sur : http://localhost:8501
 | Outil | Rôle |
 |---|---|
 | Python 3.10+ | Langage principal |
-| Streamlit | Interface web |
-| Groq (Llama 3) | Analyse IA des rêves |
-| python-dotenv | Gestion sécurisée des clés API |
-| JSON | Sauvegarde de l'historique |
-
----
-
-##  Fonctionnalités
-
--  Saisie du rêve en texte libre
--  Résumé structuré par l'IA
--  Interprétation symbolique
--  Mots-clés visuels générés
--  Historique consultable dans le menu latéral
+| Streamlit | Interface web interactive |
+| Groq - Llama 3.3 70B | Analyse et interprétation des rêves |
+| Stable Diffusion XL | Génération d'images via Hugging Face |
+| python-dotenv | Chargement sécurisé des clés API |
+| JSON | Sauvegarde locale de l'historique |
 
 ---

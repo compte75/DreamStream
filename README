@@ -1,0 +1,82 @@
+#  DreamStream — Journal de rêves intelligent
+
+Application Python qui analyse et interprète tes rêves grâce à l'IA.
+
+---
+
+## 📁 Structure du projet
+
+```
+dreamstream/
+├── app.py              → code principal de l'application
+├── requirements.txt    → liste des bibliothèques nécessaires
+├── .env                → clés API (ne pas partager !)
+├── .gitignore          → fichiers à exclure de Git
+├── README.md           → ce fichier
+└── mes_reves.json      → créé automatiquement au premier rêve
+```
+
+---
+
+## ⚙️ Installation
+
+### 1. Clone le projet
+```bash
+git clone https://github.com/ton-pseudo/dreamstream.git
+cd dreamstream
+```
+
+### 2. Crée un environnement virtuel
+```bash
+# Créer l'environnement
+python -m venv venv
+
+# L'activer (Mac/Linux)
+source venv/bin/activate
+
+# L'activer (Windows)
+venv\Scripts\activate
+```
+
+### 3. Installe les dépendances
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configure ta clé API
+Crée un fichier `.env` à la racine du projet :
+```
+GROQ_API_KEY=ta_clé_ici
+```
+Clé gratuite sur : https://console.groq.com
+
+### 5. Lance l'application
+```bash
+streamlit run app.py
+```
+
+L'app s'ouvre sur : http://localhost:8501
+
+---
+
+## Technologies utilisées
+
+| Outil | Rôle |
+|---|---|
+| Python 3.10+ | Langage principal |
+| Streamlit | Interface web |
+| Groq (Llama 3) | Analyse IA des rêves |
+| python-dotenv | Gestion sécurisée des clés API |
+| JSON | Sauvegarde de l'historique |
+
+---
+
+##  Fonctionnalités
+
+-  Saisie du rêve en texte libre
+-  Résumé structuré par l'IA
+-  Interprétation symbolique
+-  Mots-clés visuels générés
+-  Historique consultable dans le menu latéral
+
+---
